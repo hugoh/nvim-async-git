@@ -1,5 +1,8 @@
 {
   "diagnostics": {
-    "globals": ["vim"]
-  }
+    "globals": [
+      "vim"
+    ]
+  },
+  "runtime.version": "LuaJIT"
 }
