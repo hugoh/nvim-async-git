@@ -20,19 +20,27 @@ local function get_git_subcommands()
 	return commands
 end
 
-local function git_commit()
+local function git_commit(amend)
 	local git_dir = vim.fn.finddir(".git", vim.fn.getcwd() .. ";")
 	if git_dir == "" then return notify("Not a git repository", vim.log.levels.ERROR) end
 	local msg_file = vim.fn.fnamemodify(git_dir, ":p") .. "COMMIT_EDITMSG"
 
-	local result = vim.system({ "git", "status", "--short" }, { text = true }):wait()
-	local staged = { "", "# Write to commit, quit to abort" }
-	for line in (result.stdout or ""):gmatch("[^\n]+") do
-		if line:match("^[MADRC]") then table.insert(staged, "# " .. line) end
+	local msg_tbl
+	if amend then
+		local result = vim.system({ "git", "log", "-1", "--format=%B" }, { text = true }):wait()
+		msg_tbl = {}
+		for line in (result.stdout or ""):gmatch("[^\n]+") do
+			table.insert(msg_tbl, line)
+		end
+	else
+		local result = vim.system({ "git", "status", "--short" }, { text = true }):wait()
+		msg_tbl = { "", "# Write to commit, quit to abort" }
+		for line in (result.stdout or ""):gmatch("[^\n]+") do
+			if line:match("^[MADRC]") then table.insert(msg_tbl, "# " .. line) end
+		end
+		if #msg_tbl == 2 then return notify("Nothing to commit", vim.log.levels.WARN) end
 	end
-	if #staged == 2 then return notify("Nothing to commit", vim.log.levels.WARN) end
-
-	vim.fn.writefile(staged, msg_file)
+	vim.fn.writefile(msg_tbl, msg_file)
 	local win = Snacks.win({
 		file = msg_file,
 		enter = true,
@@ -52,8 +60,9 @@ local function git_commit()
 		local msg = vim.tbl_filter(function(l) return not l:match("^%s*#") and l:match("%S") end, lines)
 		if #msg == 0 then return notify("Empty commit message", vim.log.levels.WARN) end
 		vim.fn.writefile(msg, msg_file)
-		local r = vim.system({ "git", "commit", "-F", msg_file }, { cwd = vim.fn.getcwd() }):wait()
-		notify_result("git commit", r.code, r.stdout ~= "" and r.stdout or r.stderr)
+		local cmd = amend and { "git", "commit", "--amend", "-F", msg_file } or { "git", "commit", "-F", msg_file }
+		local r = vim.system(cmd, { cwd = vim.fn.getcwd() }):wait()
+		notify_result(amend and "git commit --amend" or "git commit", r.code, r.stdout ~= "" and r.stdout or r.stderr)
 		if r.code == 0 then
 			vim.bo[buf].modified = false
 			win:close()
@@ -63,7 +72,7 @@ end
 
 local function run_git_command(args)
 	if args[1] == "commit" and not vim.tbl_contains(args, "-m") and not vim.tbl_contains(args, "--message") then
-		return git_commit()
+		return git_commit(vim.tbl_contains(args, "--amend"))
 	end
 
 	local cmd_tbl = { "git", unpack(args) }
