@@ -1,2 +1,2 @@
 globals = { "vim", "Snacks" }
-std = "luajit+nvim"
+std = "luajit"
