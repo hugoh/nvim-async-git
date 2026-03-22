@@ -26,11 +26,11 @@ local function git_commit()
 	local msg_file = vim.fn.fnamemodify(git_dir, ":p") .. "COMMIT_EDITMSG"
 
 	local result = vim.system({ "git", "status", "--short" }, { text = true }):wait()
-	local staged = { "# Write to commit, quit to abort" }
+	local staged = { "", "# Write to commit, quit to abort" }
 	for line in (result.stdout or ""):gmatch("[^\n]+") do
 		if line:match("^[MADRC]") then table.insert(staged, "# " .. line) end
 	end
-	if #staged == 1 then return notify("Nothing to commit", vim.log.levels.WARN) end
+	if #staged == 2 then return notify("Nothing to commit", vim.log.levels.WARN) end
 
 	vim.fn.writefile(staged, msg_file)
 	local win = Snacks.win({
@@ -39,8 +39,11 @@ local function git_commit()
 		style = "float",
 		bo = { filetype = "gitcommit", bufhidden = "wipe", modifiable = true },
 		wo = { cursorline = true },
-		keys = { q = "close" },
-		on_win = function() vim.cmd.startinsert() end,
+		keys = { q = "close", ["ZQ"] = "close" },
+		on_win = function()
+			vim.cmd.startinsert()
+			vim.keymap.set("n", "ZZ", function() vim.cmd("write") end, { buffer = true })
+		end,
 	})
 
 	win:on("BufWriteCmd", function()
